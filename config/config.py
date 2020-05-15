@@ -11,8 +11,33 @@ __C.BASE                        = edict()
 #数据字典
 __C.BASE.DICT                  = 'config/key.txt'
 
+__C.BASE.DATA_PATH              = '/e'
 
+# 使用mel fbank或者mfcc作特征提取
+__C.BASE.FEATURE_TYPE            = 'mel'   #['mel','mfcc']
+__C.BASE.OUTPUT_NUM            = {'mel': 40,'mfcc': 26}
+#是否均值化
+__C.BASE.NOMALNIZE             = 'none'   #['none', 'local', 'local_scalar','cmvn']
+__C.BASE.initial_weight        = 'logs_lm_tf/lm_train_loss=2.8582.ckpt-2'
 #Predict options
+
+#迭代
+__C.BASE.epochs                =30
+__C.BASE.warmup_periods        =10
+#学习率
+__C.BASE.lr                    =1e-4
+__C.BASE.lr_deep               =1e-6
+
+# Train options
+__C.TRAIN                       = edict()
+
+__C.TRAIN.BATCH_SIZE            = 12
+__C.TRAIN.read_files            = ['aishell_train.txt']
+
+# TEST options
+__C.TEST                        = edict()
+__C.TEST.BATCH_SIZE            = 12
+__C.TEST.read_files             =['aishell_dev.txt']
 
 __C.PREDICT                    = edict()
 
