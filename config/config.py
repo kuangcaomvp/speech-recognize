@@ -25,8 +25,8 @@ __C.BASE.initial_weight        = 'logs_lm_tf/lm_train_loss=2.8582.ckpt-2'
 __C.BASE.epochs                =30
 __C.BASE.warmup_periods        =10
 #学习率
-__C.BASE.lr                    =1e-4
-__C.BASE.lr_deep               =1e-6
+__C.BASE.lr                    =1e-3
+__C.BASE.lr_deep               =1e-5
 
 # Train options
 __C.TRAIN                       = edict()

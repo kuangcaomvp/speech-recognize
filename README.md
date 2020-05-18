@@ -30,3 +30,15 @@
 
 		运行 python generate_data.py 不报错 则数据准备正确
 	运行 python train.py 进行训练 
+
+4 模型冻结 
+    
+    freeze_graph.py  修改ckpt_file为自己训练的checkpoint路径
+                      
+                     pb_file   生成的pb文件保存路径
+    
+    运行  python freeze_graph.py
+    
+    修改 config.py 中__C.PREDICT.pb = pb_file
+    
+    运行python decode.py 测试
