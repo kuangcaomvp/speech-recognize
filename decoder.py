@@ -1,16 +1,19 @@
 #coding=utf-8
 
 
-import numpy as np
-import soundfile
-import tensorflow as tf
 
-from config.config import cfg
+import os
+
+import tensorflow as tf
+import numpy as np
+
 from ctc_prefix_score import CTCPrefixScore
 
+from config.config import cfg
 
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+from util.feature import load_sample
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 def readtxt(txt):
     with open(txt, 'r') as f:
@@ -31,11 +34,9 @@ def read_pb_return_tensors(graph, pb_file, return_elements):
 def end_detect(ended_hyps, i, M=3, D_end=np.log(1 * np.exp(-10))):
     if len(ended_hyps) == 0:
         return False
-
     count = 0
     best_hyp = sorted(ended_hyps, key=lambda x: x['score'], reverse=True)[0]
     for m in range(M):
-        # get ended_hyps with their length is i - m
         hyp_length = i - m
         hyps_same_length = [x for x in ended_hyps if len(x['yseq']) == hyp_length]
         if len(hyps_same_length) > 0:
@@ -51,20 +52,24 @@ def end_detect(ended_hyps, i, M=3, D_end=np.log(1 * np.exp(-10))):
 
 def beam_search_decode_with_ctc(x, han_vocab, sess):
     enc, lpz = sess.run([return_tensors[3], return_tensors[4]], {return_tensors[0]: np.array([x])})
-    # print(enc.shape)
     lpz = np.squeeze(lpz, axis=0)
 
     if ctc_weight == 0.0:
         lpz =None
 
-    maxlen = enc.shape[1]-1
+    maxlen = enc.shape[1]
     minlen = 0
+
     eos = han_vocab.index('<EOS>')
+
     hyp = {'score': 0.0, 'yseq': [eos]}
+
     if lpz is not None:
         ctc_prefix_score = CTCPrefixScore(lpz, han_vocab.index('*'), eos)
         hyp['ctc_state_prev'] = ctc_prefix_score.initial_state()
         hyp['ctc_score_prev'] = 0.0
+        # print(hyp['ctc_state_prev'])
+
         if ctc_weight != 1.0:
             ctc_beam = min(lpz.shape[-1], int(beam * CTC_SCORING_RATIO))
         else:
@@ -72,9 +77,9 @@ def beam_search_decode_with_ctc(x, han_vocab, sess):
 
     hyps = [hyp]
     ended_hyps = []
-
     for i in range(maxlen):
         hyps_best_kept = []
+
         max_len = max(len(hyp['yseq']) for hyp in hyps)
         ys = np.ones(shape=(len(hyps),max_len))*eos
         for k, hyp in enumerate(hyps):
@@ -84,9 +89,10 @@ def beam_search_decode_with_ctc(x, han_vocab, sess):
                                                             return_tensors[1]: ys,
                                                             return_tensors[2]: np.tile(np.array([[maxlen]]),(len(hyps),1))})
 
+        # * 是ctc占位符 语言模型中不会出现
+        local_att_scores_all[:, han_vocab.index('*')] = -10000000000.0
         local_scores_all = local_att_scores_all
 
-        # **  ***    **
         if lpz is not None:
             local_best_scores_all, local_best_ids_all = sess.run([score, ids],
                                                                  {topk_input: local_att_scores_all,
@@ -99,12 +105,12 @@ def beam_search_decode_with_ctc(x, han_vocab, sess):
             ctc_scores_all, ctc_states_all = ctc_prefix_score(
                     ys, local_best_ids_all, ctc_state_prev)
 
-            # 取local_best_ids_all对应的分数
             local_att_scores_all_now = local_att_scores_all[
                 np.arange(0, local_best_ids_all.shape[0])[:, np.newaxis], local_best_ids_all]
 
             local_scores_all = (1.0 - ctc_weight) * local_att_scores_all_now \
                                + ctc_weight * (ctc_scores_all - ctc_score_prev)
+
 
             local_best_scores_all, joint_best_ids_all = sess.run([score, ids],
                                                                  {topk_input: local_scores_all, beam_size: beam})
@@ -143,15 +149,11 @@ def beam_search_decode_with_ctc(x, han_vocab, sess):
                     ended_hyps.append(hyp)
             else:
                 remained_hyps.append(hyp)
-
         if end_detect(ended_hyps, i):
             break
-
         hyps = remained_hyps
-
         if len(hyps) <= 0:
             break
-
     ended_hyps=sorted(
         ended_hyps, key=lambda x: x['score'], reverse=True)
     lenth = len(ended_hyps)
@@ -177,34 +179,30 @@ def beam_search_decode_with_ctc(x, han_vocab, sess):
         m_r = lenth
     ended_hyps = ended_hyps[m_l:m_r]
 
-    print('all scores: ', '\n')
     a_s = [i['score'] for i in ended_hyps]
     a_seq = [[han_vocab[b] for b in i['yseq']] for i in ended_hyps]
     for a, b in zip(a_s, a_seq):
         print(a, b)
-
     nbest_hyps = sorted(
         ended_hyps, key=lambda x: x['score'], reverse=True)[:min(len(ended_hyps), nbest)]
-
     if len(nbest_hyps) == 0:
         return []
-
     result = [han_vocab[i] for i in nbest_hyps[0]['yseq'][1:-1]]
     return result
 
 
 if __name__ == '__main__':
+    # 参数初始化
+    feature_type = cfg.BASE.FEATURE_TYPE
+    nomalnize = cfg.BASE.NOMALNIZE
+    data_last_channel= int(cfg.BASE.OUTPUT_NUM[feature_type])
     # ctc权重  训练参数
     ctc_weight = cfg.PREDICT.CTC_WEIGHT
-
     CTC_SCORING_RATIO = cfg.PREDICT.CTC_SCORING_RATIO
     beam = cfg.PREDICT.BEAM
     penalty = cfg.PREDICT.PENALTY
     nbest = cfg.PREDICT.NBEST
     han_vocab = readtxt(cfg.BASE.DICT)
-    # var_list = checkpoint_utils.list_variables(ckpt_file)
-    # for v in var_list:
-    #     print(v)
     graph_e2e = tf.Graph()
 
     #端到段模型初始化
@@ -221,19 +219,13 @@ if __name__ == '__main__':
         beam_size = tf.placeholder(tf.int32, shape=(), name='beam_size')
         topk_input= tf.placeholder(tf.float32, shape=(None, None), name='topk_input')
         #tensorflow 求topk
-        score,ids = tf.nn.top_k(topk_input,k=beam_size)
-        sess  = tf.Session(config=tf.ConfigProto(allow_soft_placement=True),graph=graph_e2e)
+        score, ids = tf.nn.top_k(topk_input, k=beam_size)
+        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True),graph=graph_e2e)
 
-
-    full_path = 'D4_750.wav'
-    (data_input, sampling_rate) = soundfile.read(full_path)
-    data_input = np.append(data_input[0], data_input[1:] - 0.95 * data_input[:-1])
-    x = np.array(data_input)[:, np.newaxis]
-    result = beam_search_decode_with_ctc(x, han_vocab, sess)
-    result = ''.join(result)
-    result = result.replace('$', ' ')
-    print('result:', result)
-
+    full_path ='D4_750.wav'
+    x, wave_len = load_sample(full_path, feature_type, nomalnize)
+    result = beam_search_decode_with_ctc(x,han_vocab,sess)
+    print('result: ' + ''.join(result))
 
 
 
