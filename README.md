@@ -2,11 +2,17 @@
 语音识别
 
 1 环境安装
+
    pip install soundfile
+   
    pip install tensorflow-gpu==1.12
+   
    pip install python_speech_features
+   
    pip install tqdm
+   
    pip install easydict
+   
    cuda9.0
    
 
