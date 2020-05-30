@@ -74,7 +74,7 @@ class get_data(object):
 
 
     def calculation(self,wave,label,label_in,label_out):
-        data_input,wave_len =load_sample(wave,self.feature_type,self.nomalnize,self.data_type)
+        data_input,wave_len =load_sample(wave,self.feature_type,self.nomalnize)
 
         if data_input.shape[0] % 4 != 0:
             data = np.zeros((data_input.shape[0] // 4 * 4 + 4, data_input.shape[1]))
