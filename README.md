@@ -23,7 +23,7 @@
 
         数据准备：
         
-            见data文件夹 txt格式 音频路径+'\t' + label (label用空格分割)
+            见data文件夹 txt格式 音频路径+'\t' + label (label用空格分割)  //'\t'是指tab建不是字符
         
             config.py 中data_path+音频路径  为音频的绝对路径
         
